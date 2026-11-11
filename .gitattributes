@@ -1,0 +1,7 @@
+# The image is built on Linux. A shell script or config file checked out with
+# CRLF line endings on Windows would break the build, so force LF everywhere.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jxl binary

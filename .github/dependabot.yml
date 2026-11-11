@@ -1,0 +1,8 @@
+# From the BlueBuild template: opens a pull request when a newer version of the
+# blue-build GitHub Action (used in .github/workflows/build.yml) is released.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"

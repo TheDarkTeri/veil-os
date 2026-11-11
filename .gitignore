@@ -1,0 +1,11 @@
+# Signing keys: the private half must never be committed.
+cosign.key
+cosign.private
+
+# BlueBuild local build output
+/Containerfile
+*.iso
+*.iso-CHECKSUM
+
+# Scratch previews written by branding/make-branding.ps1
+/branding/preview/

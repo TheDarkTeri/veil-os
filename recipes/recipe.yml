@@ -1,0 +1,52 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/recipe-v1.json
+#
+# Veil OS recipe. BlueBuild turns this file into a Containerfile and builds it
+# in GitHub Actions. Reference: https://blue-build.org/reference/recipe/
+
+# The image is published to ghcr.io/<github owner>/<name>.
+name: veil-os
+# Stored in the image's metadata.
+description: Veil OS - personal gaming image based on Bazzite (KDE, Steam Gaming Mode, NVIDIA).
+
+# The image to build on top of (the FROM line) and which tag of it to use.
+#
+# bazzite-deck-nvidia = Bazzite with KDE Plasma, booting into Steam Gaming Mode,
+# with the NVIDIA open kernel driver (GTX 16xx and all RTX cards).
+# It already contains the kernel, driver, gamescope session, Steam, Lutris,
+# MangoHud, controller support and the gaming tweaks. See README.md.
+base-image: ghcr.io/ublue-os/bazzite-deck-nvidia
+image-version: stable
+
+# Modules run in order, top to bottom.
+modules:
+  # 1. Copy files/system/* onto / of the image.
+  #    This puts the boot-splash logo and the wallpaper in place.
+  - type: files
+    files:
+      - source: system
+        destination: /
+
+  # 2. ProtonUp-Qt (installs GE-Proton and other compatibility tools for Steam/Lutris).
+  #    Bazzite lists it as a default app, but only its ISO installer installs that
+  #    list. Declaring it here means it is present however the system was installed.
+  #    "system" scope = installed once for all users.
+  - type: default-flatpaks
+    configurations:
+      - scope: system
+        notify: true
+        install:
+          - net.davidotek.pupgui2
+
+  # 3. Build-time scripts from files/scripts/.
+  #    branding.sh        - os-release display name, default KDE wallpaper
+  #    regen-initramfs.sh - rebuild the initramfs so the new boot-splash logo is in it
+  #    Order matters: the initramfs must be rebuilt after everything else has changed.
+  - type: script
+    scripts:
+      - branding.sh
+      - regen-initramfs.sh
+
+  # 4. Installs the policy and public key so the running system verifies that
+  #    updates are signed with this repo's cosign key.
+  - type: signing
