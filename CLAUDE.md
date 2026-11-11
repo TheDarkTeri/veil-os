@@ -71,6 +71,8 @@ Test VM: VMware on Windows 11 (no NVIDIA GPU, no Vulkan; desktop-only testing).
 | `files/scripts/branding.sh` | Build-time: os-release display fields, default KDE wallpaper |
 | `files/scripts/regen-initramfs.sh` | Build-time: rebuilds initramfs so the Plymouth logo is included |
 | `.github/workflows/build.yml` | BlueBuild's template workflow; builds on push, daily, and on demand |
+| `.github/workflows/build-iso.yml` | Builds the live installer ISO; manual trigger only, uses no secrets |
+| `iso/patch-installer.sh`, `iso/iso.yaml` | Adapt Bazzite's installer (pinned commit) to install Veil OS |
 | `branding/make-branding.ps1` | Regenerates the wallpaper and splash PNGs from `branding/Logo.png` |
 | `docs/TESTING.md` | What to verify in VMware vs. on the real machines |
 
@@ -121,6 +123,48 @@ Conventions:
   Rule 1 applies to both: ask before touching either.
 - The `gh` token on this machine has no `read:packages` scope, so the packages API returns
   403. Check visibility with an anonymous pull instead of widening the token.
+
+## ISO (added 2026-11-11)
+
+The user wants to install like Linux Mint: boot a flash drive, install, done; no stock
+Bazzite, no rebase.
+
+- **BlueBuild cannot make ISOs right now.** `bluebuild generate-iso` wraps
+  `JasonN3/build-container-installer`, declared end-of-life 2026-09-27 and archived
+  2026-10-26 (its issue #215: it cannot build since Fedora archived the repos it used).
+  BlueBuild's replacement is undecided (`blue-build/cli` issue #613, unmerged PR #831).
+  Re-check those before changing approach.
+- **Chosen route: Bazzite's own ISO pipeline.** `build-iso.yml` mirrors
+  `ublue-os/bazzite/.github/workflows/build_iso.yml`: Bazzite's `installer/` at commit
+  `3110f3c` + `ublue-os/titanoboa@5c457c3`. That pair is what produced Bazzite's green ISO
+  runs on 2026-11-08 (their workflow then used `Zeglius/titanoboa@revamp-pr`, whose tree is
+  identical to `5c457c3`). The `bazzite-deck-nvidia` job took 29 minutes on `ubuntu-latest`
+  and uploaded its ISO as an artifact.
+- **It is a live ISO, but only an installer environment.** The live desktop is
+  `ghcr.io/ublue-os/bazzite:stable` (no NVIDIA driver, no Steam, no Gaming Mode), as for all
+  of Bazzite's ISOs. Do not promise "try Veil OS from the stick".
+- **Why a patch is needed:** Bazzite's hook finds the image to install with
+  `podman images 'bazzite*'`. `iso/patch-installer.sh` replaces that with
+  `INSTALL_IMAGE_PAYLOAD`, maps the hook's `*-nvidia*` checks to "yes" and `*-deck*` to "no"
+  (handheld on-screen keyboard), swaps the boot menu and renames "Bazzite" in the welcome
+  dialogs. It is guarded; bumping `BAZZITE_COMMIT` will fail loudly if the files changed.
+- **Updates:** the installer ends with `bootc switch --mutate-in-place
+  --enforce-container-sigpolicy --transport registry ghcr.io/thedarkteri/veil-os:<tag>`.
+  The workflow reads that line back out of the built image and fails if it is not there.
+- **Left alone on purpose:** the login script's NVIDIA "hardware helper" still looks for
+  `bazzite*`, finds nothing and skips itself (with a real name it would call Veil OS the
+  wrong image). Conky and the MOTD in the live session show an empty image name for the
+  same reason; cosmetic.
+- **No secrets in the ISO workflow.** Bazzite signs its ISOs with cosign; this one only
+  writes a SHA-256. Adding signing means using `SIGNING_SECRET`: rule 1, ask first.
+- Sizes: Bazzite's `bazzite-deck-nvidia` live ISO is 10.02 GiB; the Veil OS image is
+  6.60 GiB compressed on GHCR. A 16 GB flash drive is the minimum.
+- Flashing a drive and installing are disk operations: the user does them (rule 1).
+
+Not verified for the ISO (see `docs/TESTING.md`, Part I): that the patched installer
+completes; that the image's signature policy satisfies `--enforce-container-sigpolicy`;
+that the ISO boots in VMware and on the two machines; that GitHub does not bill a public
+repo for a 10 GiB artifact (its docs do not say; Bazzite's public repo uploads them).
 
 ## Artwork notes
 

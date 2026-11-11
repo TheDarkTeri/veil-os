@@ -1,0 +1,189 @@
+# Builds a bootable live ISO that installs Veil OS.
+#
+# Run it by hand: Actions -> "Build ISO" -> Run workflow, or
+#   gh workflow run "Build ISO"
+# The ISO appears under "Artifacts" on the run's page about 30 minutes later.
+#
+# How it works
+# ------------
+# BlueBuild has no working ISO generator at the moment (the tool behind
+# `bluebuild generate-iso` was retired upstream in 2026). So this reuses the
+# pipeline Bazzite builds its own ISOs with, on the same kind of runner:
+#
+#   1. Bazzite's installer/ directory, at a pinned commit, describes a "live
+#      environment" image: a KDE desktop with the Anaconda installer in it.
+#   2. iso/patch-installer.sh changes the three places where that installer
+#      assumes the image to install is called "bazzite...".
+#   3. `podman build` makes that live image and pulls Veil OS INTO it, so the
+#      install itself needs no network.
+#   4. Titanoboa (Universal Blue's ISO builder) turns the live image into an ISO.
+#
+# The steps below mirror .github/workflows/build_iso.yml in ublue-os/bazzite.
+# No secrets are used: the ISO gets a SHA-256 checksum, not a signature.
+name: Build ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Tag of ghcr.io/thedarkteri/veil-os to put on the ISO"
+        required: true
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+env:
+  # The image the ISO installs, and that the installed system updates from.
+  PAYLOAD_IMAGE: ghcr.io/thedarkteri/veil-os
+  # The desktop the flash drive boots into while installing. Bazzite uses its
+  # plain desktop image for this (no NVIDIA driver, no Gaming Mode) for every
+  # one of its ISOs, including the bazzite-deck-nvidia one.
+  LIVE_BASE_IMAGE: ghcr.io/ublue-os/bazzite:stable
+  # Commit of github.com/ublue-os/bazzite whose installer/ directory is used.
+  # This one produced green ISO builds upstream on 2026-11-08. To move to a
+  # newer one: change it here, run the workflow, and read what
+  # iso/patch-installer.sh reports. It refuses to continue if the files changed shape.
+  BAZZITE_COMMIT: 3110f3c592a020f124b61e7b3b133391e689f82e
+  ISO_NAME: veil-os-live-amd64.iso
+
+jobs:
+  build-iso:
+    name: Build live ISO
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check the requested tag
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          if [[ ! "$IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]]; then
+            echo "::error::'$IMAGE_TAG' is not a valid image tag"
+            exit 1
+          fi
+          echo "PAYLOAD=${PAYLOAD_IMAGE}:${IMAGE_TAG}" >> "$GITHUB_ENV"
+
+      # A standard runner has about 14 GB free. The live image alone is larger.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
+        with:
+          tool-cache: true
+
+      # Same trick as upstream: keep podman's storage on a compressed BTRFS
+      # file on the runner's second disk, so the build fits.
+      - name: Put container storage on a compressed loopback disk
+        run: |
+          sudo truncate -s 110G /mnt/podman-storage.img
+          sudo mkfs.btrfs -f -m single -d single /mnt/podman-storage.img
+          sudo podman system reset --force
+          sudo systemctl stop podman.service
+          LOOP=$(sudo losetup --find --show --direct-io=on /mnt/podman-storage.img)
+          sudo mkdir -p /mnt/podman-storage
+          sudo mount -o compress-force=zstd:2,discard=async,noatime "$LOOP" /mnt/podman-storage
+          sudo mkdir -p /mnt/podman-storage/storage /mnt/podman-storage/tmp
+          sudo mount --bind /mnt/podman-storage/storage /var/lib/containers/storage
+          sudo systemctl start podman.service
+
+      - name: Check out this repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Check out Bazzite's installer at the pinned commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: ublue-os/bazzite
+          ref: ${{ env.BAZZITE_COMMIT }}
+          path: bazzite
+          sparse-checkout: installer
+          persist-credentials: false
+
+      - name: Adapt the installer for Veil OS
+        run: iso/patch-installer.sh bazzite/installer
+
+      # Builds the live environment and pulls $PAYLOAD into it.
+      - name: Build the live image
+        run: |
+          sudo env TMPDIR=/mnt/podman-storage/tmp podman build \
+            --cap-add sys_admin \
+            --security-opt label=disable \
+            --build-arg BASE_IMAGE="$LIVE_BASE_IMAGE" \
+            --build-arg INSTALL_IMAGE_PAYLOAD="$PAYLOAD" \
+            --build-arg FLATPAK_DIR_SHORTNAME="kde_flatpaks" \
+            -t localhost/payload:latest bazzite/installer/
+
+      # Read the installer's instructions back out of the image that was just
+      # built. If they do not name Veil OS, stop before making an ISO of it.
+      - name: Check what the installer will install
+        run: |
+          ks="$(sudo podman run --rm --network none --entrypoint cat localhost/payload:latest \
+                  /usr/share/anaconda/interactive-defaults.ks \
+                  /usr/share/anaconda/post-scripts/install-configure-upgrade.ks)"
+          echo "--- installer lines that name an image:"
+          grep -E '^(ostreecontainer|bootc switch) ' <<< "$ks"
+          grep -qxF "ostreecontainer --url=${PAYLOAD} --transport=containers-storage --no-signature-verification" <<< "$ks" \
+            || { echo "::error::the installer would not deploy ${PAYLOAD}"; exit 1; }
+          grep -qxF "bootc switch --mutate-in-place --enforce-container-sigpolicy --transport registry ${PAYLOAD}" <<< "$ks" \
+            || { echo "::error::the installed system would not update from ${PAYLOAD}"; exit 1; }
+
+      - name: Show disk space
+        if: always()
+        run: |
+          sudo df -h / /mnt /mnt/podman-storage || true
+          sudo du -sh /mnt/podman-storage.img || true
+
+      - name: Build the ISO
+        id: build
+        uses: ublue-os/titanoboa@5c457c3d0518bd17e754be0fd98a60d29d26abb4 # main as of 2026-05-19, the commit Bazzite pins
+        with:
+          image-ref: localhost/payload:latest
+          iso-dest: ${{ env.ISO_NAME }}
+
+      - name: Checksum and summary
+        env:
+          ISO_PATH: ${{ steps.build.outputs.iso-dest }}
+        run: |
+          mkdir -p upload
+          mv "$ISO_PATH" "upload/$ISO_NAME"
+          cd upload
+          sha256sum "$ISO_NAME" | tee "$ISO_NAME.sha256"
+          bytes=$(stat -c %s "$ISO_NAME")
+          {
+            echo "## Veil OS ISO"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| File | \`$ISO_NAME\` (under **Artifacts** on this page) |"
+            echo "| Installs | \`$PAYLOAD\` |"
+            echo "| Size | $(numfmt --to=iec-i --suffix=B --format=%.2f "$bytes") ($bytes bytes) |"
+            echo "| SHA-256 | \`$(cut -d' ' -f1 "$ISO_NAME.sha256")\` |"
+            echo
+            echo "Check the download on Windows with:"
+            echo
+            echo '```powershell'
+            echo "Get-FileHash .\\$ISO_NAME -Algorithm SHA256"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # archive: false uploads the file as it is, so the download is a plain
+      # .iso rather than a zip. The artifact is named after the file.
+      - name: Upload the ISO
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          path: upload/${{ env.ISO_NAME }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload the checksum
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          path: upload/${{ env.ISO_NAME }}.sha256
+          archive: false
+          if-no-files-found: error
+          retention-days: 7

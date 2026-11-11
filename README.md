@@ -66,7 +66,9 @@ A running Veil OS system then pulls that image as its update. Nothing is compile
 | `files/system/` | Copied verbatim onto `/` of the image. |
 | `files/scripts/branding.sh` | Build time: display name in os-release, default KDE wallpaper. |
 | `files/scripts/regen-initramfs.sh` | Build time: rebuilds the initramfs so the new boot logo is in it. |
-| `.github/workflows/build.yml` | BlueBuild's template workflow. |
+| `.github/workflows/build.yml` | BlueBuild's template workflow: builds and publishes the image. |
+| `.github/workflows/build-iso.yml` | Builds the installer ISO, on demand only. |
+| `iso/` | The three adjustments that make Bazzite's installer install Veil OS. |
 | `branding/` | Source logo and the script that turns it into wallpaper + splash logo. |
 | `docs/TESTING.md` | Test checklist: VMware vs. real hardware. |
 | `CLAUDE.md` | Project context and rules for AI assistants (and humans). |
@@ -138,10 +140,81 @@ cosign verify --key cosign.pub ghcr.io/thedarkteri/veil-os
 
 ---
 
-## 3. Install (rebase)
+## 3. Install
 
-Veil OS has no installer of its own. You install Bazzite, then *rebase* it: tell the system
-to use a different image as its OS. Your files, Flatpaks and settings stay.
+There are two ways in. Both end with the same system, updating itself from
+`ghcr.io/thedarkteri/veil-os`.
+
+### A. From the Veil OS ISO (boot, install, done)
+
+**Get the ISO.** It is built on demand, not on every change.
+
+1. *Actions → Build ISO → Run workflow*, or:
+
+   ```bash
+   gh workflow run "Build ISO"
+   ```
+
+   It takes about half an hour.
+2. Open the finished run. Under **Artifacts**, download `veil-os-live-amd64.iso`
+   (about 10 GB). The run's summary shows its size and SHA-256.
+3. Check the download in PowerShell and compare with the summary:
+
+   ```powershell
+   Get-FileHash .\veil-os-live-amd64.iso -Algorithm SHA256
+   ```
+
+GitHub deletes the artifact after 7 days. Run the workflow again for a fresh ISO; it
+always contains the newest published image.
+
+**Write it to a flash drive** of 16 GB or more (8 GB is too small) with Fedora Media
+Writer, choosing your own `.iso` file. Everything on the drive is erased.
+
+**Boot from it.** The installer environment requires UEFI boot (it refuses legacy/CSM
+mode) and expects 8 GB of RAM. Pick *Start Veil OS Installer*; the *Basic Graphics Mode*
+entry is the fallback if the screen stays black. You land on a KDE desktop with a welcome
+window; choose *Install Veil OS*.
+
+The live desktop is for installing and repairing. It is **not** a preview of Veil OS: it
+is a plain Bazzite desktop without the NVIDIA driver, without Steam and without Gaming
+Mode. It cannot run games and says nothing about performance.
+
+**Install.** Pick the language, the disk and create your user. No network is needed; the
+whole system is on the flash drive. If Secure Boot is on, the installer queues the
+Universal Blue key: on the next boot a blue screen asks to *Enroll MOK*, password
+`universalblue`.
+
+**First boot** goes into Gaming Mode. To confirm where updates come from:
+
+```bash
+rpm-ostree status
+```
+
+The booted entry should show `ghcr.io/thedarkteri/veil-os:latest`.
+
+#### How the ISO is made
+
+BlueBuild has no working ISO generator right now: the tool behind `bluebuild generate-iso`
+was retired by its author in 2026. So [build-iso.yml](.github/workflows/build-iso.yml)
+reuses the pipeline Bazzite builds its own ISOs with: Bazzite's `installer/` directory at
+a pinned commit, plus Universal Blue's [Titanoboa](https://github.com/ublue-os/titanoboa)
+at the commit Bazzite pins. [iso/patch-installer.sh](iso/patch-installer.sh) changes three
+things in that installer and refuses to continue if upstream's files have changed shape:
+
+| Change | Why |
+|---|---|
+| Install the image named by the build, not "the first image called `bazzite*`" | Required. Without it the installer has no target. This is also what points the installed system at `ghcr.io/thedarkteri/veil-os` for updates, with signature checking on. |
+| Boot menu label and entry names | Name only. |
+| "Bazzite" → "Veil OS" in the welcome dialogs | Name only. |
+
+Parts of the installer still say Bazzite (the Anaconda window, the live wallpaper, links to
+Bazzite's documentation). The ISO has a checksum but no signature, because signing would
+mean using the signing key in a second workflow.
+
+### B. By rebasing an existing Bazzite install
+
+Install Bazzite, then *rebase* it: tell the system to use a different image as its OS.
+Your files, Flatpaks and settings stay.
 
 1. Install Bazzite from [bazzite.gg](https://bazzite.gg). On the real machines pick the
    NVIDIA + KDE + Steam Gaming Mode variant (image name `bazzite-deck-nvidia`). In a VM
@@ -353,6 +426,14 @@ Things that are **not verified yet**. Check them rather than trusting this READM
 - The lock screen and KDE's login splash still show Bazzite artwork.
 - Flatpak setup: this image declares ProtonUp-Qt through BlueBuild's `default-flatpaks`
   module next to Bazzite's own Flatpak handling; check there is exactly one Flathub remote.
+- The ISO: nobody upstream builds Bazzite's installer around an image that is not called
+  `bazzite...`. That the patched installer completes, that the signature policy in the
+  image satisfies its final step, and that the ISO boots on the two target machines all
+  have to be tested (`docs/TESTING.md`, Part I).
+- Bazzite's own installer tells people with an NVIDIA GPU that Steam Gaming Mode on NVIDIA
+  is a beta with known issues it cannot fix, and recommends its desktop images instead.
+  The Veil OS ISO does not show that warning (it only triggers for images named
+  `bazzite...`), so it is repeated here.
 
 ## 9. Status
 

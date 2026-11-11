@@ -6,6 +6,7 @@ Two places to test, and they prove different things.
 |---|---|---|
 | Image builds, pulls, boots | Yes | Yes |
 | Rebase, update, rollback flow | **Yes, test it here first** | Repeat once |
+| ISO boots, installs, tracks Veil OS | **Yes, test it here first** | Repeat on both machines |
 | Branding (name, splash, wallpaper) | Yes | Yes |
 | Packages and tweaks are present | Yes | Yes |
 | NVIDIA driver | No (the VM has no NVIDIA card) | **Only here** |
@@ -78,6 +79,38 @@ If you forget and land on a black screen: Ctrl+Alt+F4, log in, run
 - `nvidia-smi` reports no device. There is no NVIDIA card.
 - Gaming Mode does not start.
 - Anything about frame rates.
+
+---
+
+## Part I: Installing from the ISO
+
+The ISO is the least-tested part of this project: it is Bazzite's installer, adapted to
+install an image that is not called "bazzite". Test it in VMware before putting it on a
+flash drive. Build and download it as described in README section 3A.
+
+VM setup as in Part A, but with nothing installed: attach `veil-os-live-amd64.iso` as the
+CD drive, firmware **UEFI**, RAM **8 GB** (the installer warns below about 5 GB).
+
+| # | Check | How | Pass looks like |
+|---|---|---|---|
+| I1 | Checksum | `Get-FileHash .\veil-os-live-amd64.iso -Algorithm SHA256` | Same as in the workflow run's summary |
+| I2 | ISO boots | Start the VM | Menu with *Start Veil OS Installer*; then a KDE desktop and a welcome window with *Install Veil OS* |
+| I3 | Installs without network | Disconnect the VM's network adapter, then install: language, disk, user | Finishes with no error window. (An error window shows the installer log; the last steps are "bootc-switch" and "install-flatpaks".) |
+| I4 | First boot | Reboot, detach the ISO | In a VM: Gaming Mode cannot start, so expect a black screen. Ctrl+Alt+F4, log in, `steamosctl switch-to-desktop-mode`. On real hardware: Gaming Mode. |
+| I5 | Tracks Veil OS | `rpm-ostree status` | Booted entry is `ostree-image-signed:docker://ghcr.io/thedarkteri/veil-os:latest` |
+| I6 | Updates work | Reconnect the network, `rpm-ostree upgrade` | "No upgrade available" or a staged update; no signature or policy error |
+| I7 | Default apps came along | `flatpak list --system` | Firefox and the other apps from Bazzite's list; ProtonUp-Qt (`net.davidotek.pupgui2`) appears a little after the first boot with network |
+| I8 | Branding | Checks A5 to A11 in Part A | Same as there |
+| I9 | Rollback still works | Checks A17 and A18 | Same as there |
+
+Then, on each real machine (writing the flash drive and installing erase disks; that part
+is yours to do):
+
+| # | Check | How | Pass looks like |
+|---|---|---|---|
+| I10 | Flash drive boots | Boot from the drive (UEFI, not legacy) | Menu, then the live desktop on the NVIDIA card. If the screen stays black, use *Basic Graphics Mode*. |
+| I11 | Secure Boot | Install with Secure Boot on | Blue *Enroll MOK* screen on the next boot (password `universalblue`); afterwards `mokutil --sb-state` says enabled and the system boots |
+| I12 | The rest | Part B from B3 onwards | Same as there |
 
 ---
 

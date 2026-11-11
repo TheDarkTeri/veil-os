@@ -1,0 +1,17 @@
+# Boot menu of the Veil OS live ISO. Replaces Bazzite's installer/iso.yaml
+# when the ISO is built (see iso/patch-installer.sh).
+#
+# Format: the "container-native ISO" contract that Titanoboa reads from
+# /usr/lib/bootc-image-builder/iso.yaml inside the live image.
+# The label must be identical to the CDLABEL= in every "linux:" line;
+# that is how the booted kernel finds the flash drive it started from.
+label: "VeilOS-Live"
+grub2:
+  timeout: 3
+  entries:
+    - name: "Start Veil OS Installer"
+      linux: "/images/pxeboot/vmlinuz quiet rhgb root=live:CDLABEL=VeilOS-Live enforcing=0 rd.live.image"
+      initrd: "/images/pxeboot/initrd.img"
+    - name: "Start Veil OS Installer (Basic Graphics Mode)"
+      linux: "/images/pxeboot/vmlinuz quiet rhgb root=live:CDLABEL=VeilOS-Live enforcing=0 rd.live.image nomodeset"
+      initrd: "/images/pxeboot/initrd.img"
