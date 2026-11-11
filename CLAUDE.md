@@ -161,10 +161,21 @@ Bazzite, no rebase.
   6.60 GiB compressed on GHCR. A 16 GB flash drive is the minimum.
 - Flashing a drive and installing are disk operations: the user does them (rule 1).
 
-Not verified for the ISO (see `docs/TESTING.md`, Part I): that the patched installer
-completes; that the image's signature policy satisfies `--enforce-container-sigpolicy`;
-that the ISO boots in VMware and on the two machines; that GitHub does not bill a public
-repo for a 10 GiB artifact (its docs do not say; Bazzite's public repo uploads them).
+First ISO build (2026-11-11, run 43060366149, commit `2523af5`): green in 33 minutes
+(live image 20 min, Titanoboa 8 min, upload 1 min). `veil-os-live-amd64.iso` is 10.25 GiB
+(11,004,577,792 bytes), SHA-256 `1f0c1e1e…52b0a0bc` (full value in the README status
+table), artifact expires 2026-11-18. The 10 GiB artifact uploaded from this public repo
+without complaint. The log confirms the patched installer names
+`ghcr.io/thedarkteri/veil-os:latest` in both its `ostreecontainer` and `bootc switch`
+lines. One harmless warning: `jlumbroso/free-disk-space` says its `tool-cache` input was
+renamed to `preinstalled-runtimes`; rename it the next time the workflow is touched and
+re-run to confirm.
+
+Not verified for the ISO (see `docs/TESTING.md`, Part I): **it has never been booted.**
+That the installer completes; that the image's signature policy satisfies
+`--enforce-container-sigpolicy` at the end of the install; that it boots in VMware and on
+the two machines; whether GitHub bills a public repo for artifact storage (its docs do
+not say).
 
 ## Artwork notes
 

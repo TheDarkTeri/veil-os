@@ -157,7 +157,7 @@ There are two ways in. Both end with the same system, updating itself from
 
    It takes about half an hour.
 2. Open the finished run. Under **Artifacts**, download `veil-os-live-amd64.iso`
-   (about 10 GB). The run's summary shows its size and SHA-256.
+   (about 11 GB). The run's summary shows its size and SHA-256.
 3. Check the download in PowerShell and compare with the summary:
 
    ```powershell
@@ -441,6 +441,7 @@ Things that are **not verified yet**. Check them rather than trusting this READM
 |---|---|
 | 2026-11-11 | Repo written. Recipe keys checked against BlueBuild's module schemas; Bazzite paths and Plymouth layout checked against upstream source. Both build scripts dry-run on Windows against a fake copy of Bazzite's files (edits and guards behave). Artwork generated and seam-checked. |
 | 2026-11-11 | **First GitHub Actions build succeeded** (commit `a174eba`). Published as `ghcr.io/thedarkteri/veil-os` with tags `latest`, `45`, `20261111`, `20261111-45`. The build log shows os-release rebranded (`ID=bazzite` kept), both KDE setup scripts repointed, the initramfs rebuilt for kernel `7.3.3-ogc1.1.fc45` with the plymouth module, and the ProtonUp-Qt ID accepted by Flathub. Signature verified from Windows with `cosign.pub`; the image pulls without a login. **Not yet booted anywhere: the VM and hardware checklists in `docs/TESTING.md` are still to do.** |
+| 2026-11-11 | **First ISO built** by the `Build ISO` workflow (commit `2523af5`, 33 minutes). `veil-os-live-amd64.iso` is 10.25 GiB (11,004,577,792 bytes), SHA-256 `1f0c1e1e17e5c28e98a3abdf22f105ec10fbfc489edc34a5fc064ff052b0a0bc`, kept as an artifact until 2026-11-18. The installer inside it was read back from the built image: it deploys `ghcr.io/thedarkteri/veil-os:latest` and points the installed system at the same address with signature checking on. **The ISO has not been booted or installed anywhere: Part I of `docs/TESTING.md` is still to do.** |
 
 ## Credits
 
