@@ -228,8 +228,8 @@ sudo ostree admin pin 0
 ```
 
 **Go back to a specific older build of Veil OS:** every build is also published under a
-dated tag. Look the tags up on the package page
-(*github.com/TheDarkTeri/veil-os → Packages*) and rebase to one:
+dated tag (for example `20261111`, plus `20261111-45` with the Fedora version). Look the
+tags up on the package page (*github.com/TheDarkTeri/veil-os → Packages*) and rebase to one:
 
 ```bash
 rpm-ostree rebase ostree-image-signed:docker://ghcr.io/thedarkteri/veil-os:<tag>
@@ -358,7 +358,8 @@ Things that are **not verified yet**. Check them rather than trusting this READM
 
 | Date | What |
 |---|---|
-| 2026-11-11 | Repo written. Recipe keys checked against BlueBuild's module schemas; Bazzite paths and Plymouth layout checked against upstream source. Both build scripts dry-run on Windows against a fake copy of Bazzite's files (edits and guards behave). Artwork generated and seam-checked. **Not yet built by GitHub Actions; not yet booted anywhere.** |
+| 2026-11-11 | Repo written. Recipe keys checked against BlueBuild's module schemas; Bazzite paths and Plymouth layout checked against upstream source. Both build scripts dry-run on Windows against a fake copy of Bazzite's files (edits and guards behave). Artwork generated and seam-checked. |
+| 2026-11-11 | **First GitHub Actions build succeeded** (commit `a174eba`). Published as `ghcr.io/thedarkteri/veil-os` with tags `latest`, `45`, `20261111`, `20261111-45`. The build log shows os-release rebranded (`ID=bazzite` kept), both KDE setup scripts repointed, the initramfs rebuilt for kernel `7.3.3-ogc1.1.fc45` with the plymouth module, and the ProtonUp-Qt ID accepted by Flathub. Signature verified from Windows with `cosign.pub`; the image pulls without a login. **Not yet booted anywhere: the VM and hardware checklists in `docs/TESTING.md` are still to do.** |
 
 ## Credits
 

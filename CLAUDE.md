@@ -97,17 +97,30 @@ Conventions:
 ## Not verified (check these, don't assume)
 
 - Gaming Mode on the hybrid-graphics laptop. Fallback: `steamosctl set-default-login-mode desktop`.
+- **Nothing has been booted yet.** Every item in `docs/TESTING.md` is still open.
 - What reads `BOOTLOADER_NAME` in os-release (check the boot menu title in the VM).
-- Default visibility of the GHCR package (must be public to rebase without logging in).
 - Whether KDE's wallpaper picker lists the `VeilOS` wallpaper package.
 - Lock screen and KDE login splash still show Bazzite art (out of scope for now).
-- cosign on Windows: `winget search cosign` lists `Sigstore.Cosign` (3.1.4 on 2026-11-11).
-  Installing it and generating a key with it has not been done yet.
 - VMware's boot-splash resolution; whether Bazzite's default Plymouth theme is `bgrt` or `spinner`.
-- That the BlueBuild action lowercases the GitHub owner in the image path.
 - BlueBuild's `default-flatpaks` module running next to Bazzite's own
   `bazzite-flatpak-manager` (expect one `flathub` system remote; check it).
 - Whether a daily rebuild is the right cadence (Bazzite `stable` moves less often).
+
+## Build and signing facts (2026-11-11)
+
+- First GitHub Actions build of commit `a174eba` succeeded. The action publishes to the
+  lowercase path `ghcr.io/thedarkteri/veil-os` with tags `latest`, `<fedora>` (`45`),
+  `YYYYMMDD`, `YYYYMMDD-<fedora>` and `<short sha>-<fedora>`.
+- The package is public: an anonymous manifest request returned 200.
+- The build log is the place to confirm a change took effect: `branding.sh` prints the final
+  os-release, and dracut prints `Including module: plymouth`.
+  `gh run view <id> --repo TheDarkTeri/veil-os --log`
+- Signing key: generated with cosign 3.1.4 (winget package `Sigstore.Cosign`, which installs
+  the command as **`cosign-windows-amd64`**, not `cosign`). `cosign.pub` is committed, the
+  private key is in the `SIGNING_SECRET` repo secret and in `C:\OS\cosign.key` (git-ignored).
+  Rule 1 applies to both: ask before touching either.
+- The `gh` token on this machine has no `read:packages` scope, so the packages API returns
+  403. Check visibility with an anonymous pull instead of widening the token.
 
 ## Artwork notes
 
