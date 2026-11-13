@@ -89,7 +89,13 @@ install an image that is not called "bazzite". Test it in VMware before putting 
 flash drive. Build and download it as described in README section 3A.
 
 VM setup as in Part A, but with nothing installed: attach `veil-os-live-amd64.iso` as the
-CD drive, firmware **UEFI**, RAM **8 GB** (the installer warns below about 5 GB).
+CD drive, firmware **UEFI**.
+
+**VM memory: at least 5632 MB (5.5 GB).** The live session refuses to install when the
+guest sees less than 5,000,000 kB of RAM: it shows "Not enough memory" with only a Shutdown
+button, and reopens if closed. A VM set to 4 GB sees 3.8 GB and is blocked; 5 GB lands
+right on the limit. Bazzite's own minimum is 8 GB, so anything under that may still fail
+during the install. On a host with 8 GB, close everything else first and expect it to be slow.
 
 | # | Check | How | Pass looks like |
 |---|---|---|---|

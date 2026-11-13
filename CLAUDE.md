@@ -171,11 +171,30 @@ lines. One harmless warning: `jlumbroso/free-disk-space` says its `tool-cache` i
 renamed to `preinstalled-runtimes`; rename it the next time the workflow is touched and
 re-run to confirm.
 
-Not verified for the ISO (see `docs/TESTING.md`, Part I): **it has never been booted.**
-That the installer completes; that the image's signature policy satisfies
-`--enforce-container-sigpolicy` at the end of the install; that it boots in VMware and on
-the two machines; whether GitHub bills a public repo for artifact storage (its docs do
-not say).
+First boot (2026-11-13): the ISO boots in VMware on the laptop (UEFI) to the live KDE
+desktop, and the patched dialogs say "Veil OS". Conky's `BUILD:` and `IMAGE:` lines are
+empty, as expected. The install was not attempted because of the memory check below.
+
+**The installer's memory check** (`block_low_memory_install` in Bazzite's
+`on_gui_login.sh`, added by upstream PR #4708): it reads `MemTotal` from `/proc/meminfo`
+and, below **5,000,000 kB**, loops a dialog whose only button is Shutdown. The "8GB" in
+its text is Bazzite's documented minimum; the code only blocks below about 5 GB. Upstream's
+reason: installs on 4 GB "fail every time". They do not say at which step; the likely
+mechanism is that the live session lives in RAM and `/var/tmp`, which ostree uses during
+the deploy, is a tmpfs capped at 50% of RAM (`installer/build.sh`). There is no boot
+parameter to skip it and nothing else re-checks memory; killing `on_gui_login.sh` and
+running `liveinst` bypasses it, which is only defensible in a throwaway VM.
+
+**VMware runs on the laptop**, which has 8 GiB installed and 7.37 GiB usable
+(7,730,500 kB; 643 MB reserved for the iGPU). So the real install on the laptop passes the
+check, but a VM on that host cannot have 8 GB. A VM needs at least 5632 MB configured to
+clear the check (4096 MB shows as 3.8 GB in the guest).
+
+Not verified for the ISO (see `docs/TESTING.md`, Part I): that the installer completes;
+that the image's signature policy satisfies `--enforce-container-sigpolicy` at the end of
+the install; that an install with 5.5 GB of VM memory gets through; that the flash drive
+boots on the two machines; whether GitHub bills a public repo for artifact storage (its
+docs do not say).
 
 ## Artwork notes
 

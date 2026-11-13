@@ -171,7 +171,9 @@ always contains the newest published image.
 Writer, choosing your own `.iso` file. Everything on the drive is erased.
 
 **Boot from it.** The installer environment requires UEFI boot (it refuses legacy/CSM
-mode) and expects 8 GB of RAM. Pick *Start Veil OS Installer*; the *Basic Graphics Mode*
+mode) and at least about 5 GB of usable RAM: below 5,000,000 kB it shows a "Not enough
+memory" window whose only button is Shutdown. Bazzite's stated minimum is 8 GB installed;
+a machine with 8 GB, part of it reserved for integrated graphics, passes. Pick *Start Veil OS Installer*; the *Basic Graphics Mode*
 entry is the fallback if the screen stays black. You land on a KDE desktop with a welcome
 window; choose *Install Veil OS*.
 
@@ -442,6 +444,7 @@ Things that are **not verified yet**. Check them rather than trusting this READM
 | 2026-11-11 | Repo written. Recipe keys checked against BlueBuild's module schemas; Bazzite paths and Plymouth layout checked against upstream source. Both build scripts dry-run on Windows against a fake copy of Bazzite's files (edits and guards behave). Artwork generated and seam-checked. |
 | 2026-11-11 | **First GitHub Actions build succeeded** (commit `a174eba`). Published as `ghcr.io/thedarkteri/veil-os` with tags `latest`, `45`, `20261111`, `20261111-45`. The build log shows os-release rebranded (`ID=bazzite` kept), both KDE setup scripts repointed, the initramfs rebuilt for kernel `7.3.3-ogc1.1.fc45` with the plymouth module, and the ProtonUp-Qt ID accepted by Flathub. Signature verified from Windows with `cosign.pub`; the image pulls without a login. **Not yet booted anywhere: the VM and hardware checklists in `docs/TESTING.md` are still to do.** |
 | 2026-11-11 | **First ISO built** by the `Build ISO` workflow (commit `2523af5`, 33 minutes). `veil-os-live-amd64.iso` is 10.25 GiB (11,004,577,792 bytes), SHA-256 `1f0c1e1e17e5c28e98a3abdf22f105ec10fbfc489edc34a5fc064ff052b0a0bc`, kept as an artifact until 2026-11-18. The installer inside it was read back from the built image: it deploys `ghcr.io/thedarkteri/veil-os:latest` and points the installed system at the same address with signature checking on. **The ISO has not been booted or installed anywhere: Part I of `docs/TESTING.md` is still to do.** |
+| 2026-11-13 | **First boot of anything from this project.** The ISO was started in VMware on the laptop (UEFI, 64 GB virtual disk, 4 GB RAM): the boot menu and the live KDE desktop came up, and the dialogs say "Veil OS". The install was **not** attempted: with 4 GB the guest sees 3.8 GB, and the installer's low-memory check (it needs 5,000,000 kB) only offers Shutdown. Next: repeat with at least 5632 MB of VM memory. |
 
 ## Credits
 
