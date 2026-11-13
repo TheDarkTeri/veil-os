@@ -200,7 +200,7 @@ BlueBuild has no working ISO generator right now: the tool behind `bluebuild gen
 was retired by its author in 2026. So [build-iso.yml](.github/workflows/build-iso.yml)
 reuses the pipeline Bazzite builds its own ISOs with: Bazzite's `installer/` directory at
 a pinned commit, plus Universal Blue's [Titanoboa](https://github.com/ublue-os/titanoboa)
-at the commit Bazzite pins. [iso/patch-installer.sh](iso/patch-installer.sh) changes three
+at the commit Bazzite pins. [iso/patch-installer.sh](iso/patch-installer.sh) changes four
 things in that installer and refuses to continue if upstream's files have changed shape:
 
 | Change | Why |
@@ -208,6 +208,14 @@ things in that installer and refuses to continue if upstream's files have change
 | Install the image named by the build, not "the first image called `bazzite*`" | Required. Without it the installer has no target. This is also what points the installed system at `ghcr.io/thedarkteri/veil-os` for updates, with signature checking on. |
 | Boot menu label and entry names | Name only. |
 | "Bazzite" → "Veil OS" in the welcome dialogs | Name only. |
+| `/mnt` is a real directory in the live session instead of a symlink to `/var/mnt` | Required on Fedora 45. Without it the install stops with "`systemd-tmpfiles ... --root=/mnt/sysroot --prefix=/var/home` exited with the code 73": the installer names its target `/mnt/sysroot`, systemd 262 resolves that to `/var/mnt/sysroot` in one place but not in another, and then refuses to continue because the two do not match. Only the live session changes; the installed system keeps its normal `/mnt`. |
+
+> **The ISO built on 2026-11-11 does not contain the fourth change.** With that ISO, run
+> this in Konsole in the live session before starting the installer:
+>
+> ```bash
+> sudo rm /mnt && sudo mkdir -m 0755 /mnt
+> ```
 
 Parts of the installer still say Bazzite (the Anaconda window, the live wallpaper, links to
 Bazzite's documentation). The ISO has a checksum but no signature, because signing would
@@ -445,6 +453,8 @@ Things that are **not verified yet**. Check them rather than trusting this READM
 | 2026-11-11 | **First GitHub Actions build succeeded** (commit `a174eba`). Published as `ghcr.io/thedarkteri/veil-os` with tags `latest`, `45`, `20261111`, `20261111-45`. The build log shows os-release rebranded (`ID=bazzite` kept), both KDE setup scripts repointed, the initramfs rebuilt for kernel `7.3.3-ogc1.1.fc45` with the plymouth module, and the ProtonUp-Qt ID accepted by Flathub. Signature verified from Windows with `cosign.pub`; the image pulls without a login. **Not yet booted anywhere: the VM and hardware checklists in `docs/TESTING.md` are still to do.** |
 | 2026-11-11 | **First ISO built** by the `Build ISO` workflow (commit `2523af5`, 33 minutes). `veil-os-live-amd64.iso` is 10.25 GiB (11,004,577,792 bytes), SHA-256 `1f0c1e1e17e5c28e98a3abdf22f105ec10fbfc489edc34a5fc064ff052b0a0bc`, kept as an artifact until 2026-11-18. The installer inside it was read back from the built image: it deploys `ghcr.io/thedarkteri/veil-os:latest` and points the installed system at the same address with signature checking on. **The ISO has not been booted or installed anywhere: Part I of `docs/TESTING.md` is still to do.** |
 | 2026-11-13 | **First boot of anything from this project.** The ISO was started in VMware on the laptop (UEFI, 64 GB virtual disk, 4 GB RAM): the boot menu and the live KDE desktop came up, and the dialogs say "Veil OS". The install was **not** attempted: with 4 GB the guest sees 3.8 GB, and the installer's low-memory check (it needs 5,000,000 kB) only offers Shutdown. Next: repeat with at least 5632 MB of VM memory. |
+| 2026-11-13 | **First install attempt failed.** In VMware the installer copied the image to the virtual disk (15 GB written) and then stopped with "Installation failed": `systemd-tmpfiles --create --boot --root=/mnt/sysroot --prefix=/var/home` exited with code 73. That is Anaconda's first step after deploying the image, and it treats 73 ("could not be created") as fatal. The cause is **not confirmed**. Another Fedora 45 based Universal Blue derivative reported the identical error two days earlier (cosmic-blue-os/cosmic-blue, pull request 10) and attributed it to Fedora 45; Bazzite's public ISOs still date from 2026-10-13, before its move to Fedora 45. Waiting for the actual error text from the VM. |
+| 2026-11-13 | **Cause of the install failure found.** Re-running the step in the VM with debug logging gave: `Path '/mnt/sysroot/var/home' is not under root '/var/mnt/sysroot', refusing SELinux label fix.` (systemd 262.1-1.fc45; the only rule involved is `d /var/home 0755 root root -`). The live session's `/mnt` is a symlink to `/var/mnt`, and that mismatch is what the tool rejects. It is not specific to Veil OS: secureblue fixed the same failure in its live ISO on 2026-11-06. Memory was ruled out (5.2 GiB in the VM, 3.1 GiB available). The fix is step 4 of `iso/patch-installer.sh`, checked by a dry run only. **No ISO with the fix has been built, and no install has completed yet.** |
 
 ## Credits
 

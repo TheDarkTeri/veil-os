@@ -190,6 +190,57 @@ running `liveinst` bypasses it, which is only defensible in a throwaway VM.
 check, but a VM on that host cannot have 8 GB. A VM needs at least 5632 MB configured to
 clear the check (4096 MB shows as 3.8 GB in the guest).
 
+**CAUSE FOUND (2026-11-13), fix written, NOT yet in a built ISO.** The debug log ends with
+`Path '/mnt/sysroot/var/home' is not under root '/var/mnt/sysroot', refusing SELinux label
+fix.` The live session is a Fedora Atomic image, where `/mnt` is a symlink to `/var/mnt`.
+Anaconda passes `--root=/mnt/sysroot`; systemd 262 (262.1-1.fc45) resolves the root for its
+SELinux code but not for the file paths, then refuses to label a file "not under" the root
+and exits 73 without a message. The only matching rule is `d /var/home 0755 root root -`
+in `rpm-ostree-0-integration.conf`. Not Veil-specific: secureblue fixed the same thing on
+2026-11-06 (`secureblue/secureblue` PR 2808: `rm /mnt; mkdir -m 0755 /mnt` in the live
+environment); Bazzite's installer has no fix on main or testing and no issue for it.
+- Fix here: step 4 of `iso/patch-installer.sh` appends the same `/mnt` replacement to
+  Bazzite's hook (guarded; fails if upstream starts handling `/mnt` itself), and
+  `build-iso.yml` checks that `/mnt` is a real directory in the built live image. Dry run:
+  25 of 25 checks. `tool-cache` was also renamed to `preinstalled-runtimes` in the workflow.
+- **These changes are uncommitted and the ISO has not been rebuilt.** The ISO from
+  2026-11-11 still fails unless, in the live session before starting the installer, the
+  user runs `sudo rm /mnt && sudo mkdir -m 0755 /mnt`. The user was asked to try exactly
+  that in a freshly rebooted VM, to validate the fix and reveal any later failure (the
+  `bootc switch` signature step is next and untested) before spending a rebuild on it.
+- The text below is the earlier investigation, kept for the record.
+
+**First install attempt (2026-11-13) FAILED.** In VMware, Anaconda deployed the
+image (15 GB on the virtual disk), then died with "The command `systemd-tmpfiles --create
+--boot --root=/mnt/sysroot --prefix=/var/home` exited with the code 73". What is known:
+
+- Where: `_create_tmpfiles('/var/home')` in Anaconda's
+  `pyanaconda/modules/payloads/payload/rpm_ostree/installation.py`, the first of ten such
+  calls right after the deploy. Anaconda accepts exit codes 0 and 65 only. 73 means the
+  tmpfiles config was valid but something could not be created (permissions, missing
+  parent, read-only target, "unsafe path transition", ...).
+- It ran after our patched lines did their job (the image was found and deployed), and
+  before `bootc switch`, Flatpaks and Secure Boot, so those are still untested.
+- Probably not Veil-specific: `cosmic-blue-os/cosmic-blue` PR 10 (2026-11-11) reports the
+  identical error from a Fedora 45 based image with Bluefin's Titanoboa/Anaconda setup, says
+  partitioning and image content were ruled out, and fixed it by going back to Fedora 44.
+  That PR is one project's reasoning, not proof. Bazzite's first Fedora 45 release was
+  45.20261105; its public ISOs were last uploaded 2026-10-13, so a Fedora 45 Bazzite ISO
+  may never have been install-tested in public. No Bazzite or Anaconda issue found for it.
+- Re-run by hand in the live session (2026-11-13): the same command exits 73 again and
+  **prints nothing**, and the journal has only Anaconda's "Return code of systemd-tmpfiles:
+  73". Yet `/mnt/sysroot/var/home` exists (root:root 0755, created the minute Anaconda ran
+  the step). So the visible job is done and the tool still reports failure, silently.
+- Ruled out: memory (the VM had 5.2 GiB, 3.1 GiB available, swap half used); a missing or
+  wrongly-owned `/var` or `/var/home`.
+- The live session is Fedora 45 (Anaconda runs under Python 3.15).
+- Not known: which tmpfiles rule fails. Next step is the debug log:
+  `sudo SYSTEMD_LOG_LEVEL=debug systemd-tmpfiles --create --boot --root=/mnt/sysroot --prefix=/var/home 2>&1 | tail -40`
+  and the rules themselves:
+  `sudo grep -rn "/var/home\|^[a-zA-Z+!-]* */home" /mnt/sysroot/usr/lib/tmpfiles.d /mnt/sysroot/etc/tmpfiles.d`.
+- Until this is solved the ISO does not install. The rebase route (README 3B) does not use
+  this installer and is unaffected, but is itself untested.
+
 Not verified for the ISO (see `docs/TESTING.md`, Part I): that the installer completes;
 that the image's signature policy satisfies `--enforce-container-sigpolicy` at the end of
 the install; that an install with 5.5 GB of VM memory gets through; that the flash drive

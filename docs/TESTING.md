@@ -97,6 +97,16 @@ button, and reopens if closed. A VM set to 4 GB sees 3.8 GB and is blocked; 5 GB
 right on the limit. Bazzite's own minimum is 8 GB, so anything under that may still fail
 during the install. On a host with 8 GB, close everything else first and expect it to be slow.
 
+**With the ISO built on 2026-11-11 only:** before starting the installer, open Konsole in
+the live session and run the command below. Without it the install stops after copying the
+image, with "systemd-tmpfiles ... exited with the code 73" (README section 3A explains
+why). ISOs built after the fix do this themselves; there, `ls -ld /mnt` in the live session
+already shows a directory (`drwxr-xr-x`), not a link (`lrwxrwxrwx`).
+
+```bash
+sudo rm /mnt && sudo mkdir -m 0755 /mnt
+```
+
 | # | Check | How | Pass looks like |
 |---|---|---|---|
 | I1 | Checksum | `Get-FileHash .\veil-os-live-amd64.iso -Algorithm SHA256` | Same as in the workflow run's summary |

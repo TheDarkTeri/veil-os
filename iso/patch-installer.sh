@@ -6,13 +6,16 @@
 #
 # Veil OS has no installer of its own. The ISO workflow checks out the
 # installer/ directory of github.com/ublue-os/bazzite at a pinned commit and
-# builds it with Veil OS as the image to install. Bazzite's scripts assume the
-# image is *called* bazzite-something in three places; this script changes
-# exactly those and nothing else:
+# builds it with Veil OS as the image to install. This script makes four
+# changes to that installer and nothing else. The first three are needed
+# because Bazzite's scripts assume the image is *called* bazzite-something;
+# the fourth works around an installer failure on Fedora 45:
 #
 #   1. Which image gets installed (required: without this the installer has no target).
 #   2. The boot menu of the ISO (name only).
 #   3. The word "Bazzite" in the live session's welcome dialogs (name only).
+#   4. /mnt becomes a real directory in the live session (required on
+#      Fedora 45: otherwise the install stops with systemd-tmpfiles exit code 73).
 #
 # Like the other scripts in this repo, every change is guarded. If Bazzite's
 # files no longer look the way this script expects (after bumping the pinned
@@ -67,7 +70,7 @@ cp "${ISO_YAML}" "${BACKUP}/iso.yaml"
 # ghcr.io/thedarkteri/veil-os does not match, so imageref would be empty.
 # INSTALL_IMAGE_PAYLOAD (the build argument that names the image to embed) is
 # already in the hook's environment, so use it directly.
-echo "==> 1/3 install target"
+echo "==> 1/4 install target"
 
 start_line="$(grep -n '^imageref="\$(podman images' "${HOOK}" | cut -d: -f1 || true)"
 end_line="$(grep -n '^imagetag="\$(podman images' "${HOOK}" | cut -d: -f1 || true)"
@@ -115,7 +118,7 @@ cat "${BACKUP}/hook.new" > "${HOOK}"   # keeps the file's mode
 bash -n "${HOOK}" || fail "${HOOK} is not valid bash after patching"
 
 # -- 2. Boot menu ------------------------------------------------------------------
-echo "==> 2/3 boot menu"
+echo "==> 2/4 boot menu"
 label="$(sed -n 's/^label: *"\(.*\)" *$/\1/p' "${OUR_ISO_YAML}")"
 [[ -n "${label}" ]] || fail "no label found in ${OUR_ISO_YAML}"
 entries="$(grep -c '^ *linux:' "${OUR_ISO_YAML}" || true)"
@@ -133,7 +136,7 @@ cat "${OUR_ISO_YAML}" > "${ISO_YAML}"
 # a helper that warns about the wrong Bazzite image for your GPU; that helper
 # finds the image by the name 'bazzite*', finds nothing here, and skips itself.
 # That is intended, so make sure it still works that way.
-echo "==> 3/3 welcome dialogs"
+echo "==> 3/4 welcome dialogs"
 [[ "$(count "${LOGIN}" 'Welcome to the Live ISO for Bazzite')" == 1 ]] \
     || fail "welcome text not found in ${LOGIN}"
 [[ "$(count "${LOGIN}" 'install_button="Install Bazzite"')" == 1 ]] \
@@ -146,6 +149,44 @@ echo "==> 3/3 welcome dialogs"
 sed -i 's/Bazzite/Veil OS/g' "${LOGIN}"
 [[ "$(count "${LOGIN}" 'Bazzite')" == 0 ]] || fail "'Bazzite' still appears in ${LOGIN}"
 bash -n "${LOGIN}" || fail "${LOGIN} is not valid bash after patching"
+
+# -- 4. /mnt must be a real directory in the live environment --------------------------
+# Found by the first test install (2026-11-13): the installer died with
+#   systemd-tmpfiles --create --boot --root=/mnt/sysroot --prefix=/var/home  -> exit code 73
+# and no message. With SYSTEMD_LOG_LEVEL=debug it says:
+#   Path '/mnt/sysroot/var/home' is not under root '/var/mnt/sysroot', refusing SELinux label fix.
+#
+# On Fedora Atomic images /mnt is a symlink to /var/mnt, and the live session
+# IS such an image. Anaconda tells systemd-tmpfiles --root=/mnt/sysroot.
+# systemd 262 (Fedora 45) resolves the root to /var/mnt/sysroot for its SELinux
+# code but keeps the unresolved spelling for the files, then refuses to label a
+# file that is "not under" the root. Making /mnt a real directory in the live
+# image removes the two spellings. secureblue fixed its live ISO the same way
+# (secureblue/secureblue pull request 2808).
+#
+# This only changes the live environment. The installed system keeps its
+# normal /mnt -> /var/mnt symlink.
+echo "==> 4/4 /mnt in the live environment"
+BUILD_SH="${INSTALLER_DIR}/build.sh"
+[[ -f "${BUILD_SH}" ]] || fail "${BUILD_SH} not found"
+for f in "${HOOK}" "${BUILD_SH}"; do
+    if grep -qE '(^|[[:space:]"'"'"'])/mnt([[:space:]"'"'"']|$)' "${f}"; then
+        fail "${f} now handles /mnt itself; check whether step 4 of this script is still needed"
+    fi
+done
+
+cat >> "${HOOK}" <<'EOF'
+
+# Veil OS: /mnt must be a real directory in the live session, not the usual
+# symlink to /var/mnt, or the installer's systemd-tmpfiles step fails with
+# exit code 73 (see iso/patch-installer.sh, step 4).
+if [[ -L /mnt ]]; then
+    rm /mnt
+    mkdir -m 0755 /mnt
+fi
+[[ -d /mnt && ! -L /mnt ]] || { echo "/mnt is not a real directory" >&2; exit 1; }
+EOF
+bash -n "${HOOK}" || fail "${HOOK} is not valid bash after patching"
 
 # -- Show what changed -----------------------------------------------------------------
 echo

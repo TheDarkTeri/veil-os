@@ -72,7 +72,8 @@ jobs:
       - name: Free disk space
         uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
         with:
-          tool-cache: true
+          # Called "tool-cache" before v2; Bazzite's workflow still uses that name.
+          preinstalled-runtimes: true
 
       # Same trick as upstream: keep podman's storage on a compressed BTRFS
       # file on the runner's second disk, so the build fits.
@@ -130,6 +131,13 @@ jobs:
             || { echo "::error::the installer would not deploy ${PAYLOAD}"; exit 1; }
           grep -qxF "bootc switch --mutate-in-place --enforce-container-sigpolicy --transport registry ${PAYLOAD}" <<< "$ks" \
             || { echo "::error::the installed system would not update from ${PAYLOAD}"; exit 1; }
+          # /mnt must be a real directory in the live session, or the install
+          # stops with "systemd-tmpfiles ... exited with the code 73" (step 4 of
+          # iso/patch-installer.sh).
+          sudo podman run --rm --network none --entrypoint sh localhost/payload:latest \
+              -c '[ -d /mnt ] && [ ! -L /mnt ]' \
+            || { echo "::error::/mnt is still a symlink in the live image"; exit 1; }
+          echo "--- /mnt in the live image is a real directory"
 
       - name: Show disk space
         if: always()
