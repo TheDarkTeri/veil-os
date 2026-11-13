@@ -99,7 +99,9 @@ Conventions:
 ## Not verified (check these, don't assume)
 
 - Gaming Mode on the hybrid-graphics laptop. Fallback: `steamosctl set-default-login-mode desktop`.
-- **Nothing has been booted yet.** Every item in `docs/TESTING.md` is still open.
+- **The installed system has never been booted.** As of 2026-11-13 the live ISO boots and an
+  install completes in VMware (see "ISO" below), but everything in `docs/TESTING.md` about
+  the running system (branding, packages, tweaks, updates, rollback, hardware) is still open.
 - What reads `BOOTLOADER_NAME` in os-release (check the boot menu title in the VM).
 - Whether KDE's wallpaper picker lists the `VeilOS` wallpaper package.
 - Lock screen and KDE login splash still show Bazzite art (out of scope for now).
@@ -203,11 +205,18 @@ environment); Bazzite's installer has no fix on main or testing and no issue for
   Bazzite's hook (guarded; fails if upstream starts handling `/mnt` itself), and
   `build-iso.yml` checks that `/mnt` is a real directory in the built live image. Dry run:
   25 of 25 checks. `tool-cache` was also renamed to `preinstalled-runtimes` in the workflow.
-- **These changes are uncommitted and the ISO has not been rebuilt.** The ISO from
+- Committed and pushed as `6a6568e`. **The ISO has not been rebuilt**: the ISO from
   2026-11-11 still fails unless, in the live session before starting the installer, the
-  user runs `sudo rm /mnt && sudo mkdir -m 0755 /mnt`. The user was asked to try exactly
-  that in a freshly rebooted VM, to validate the fix and reveal any later failure (the
-  `bootc switch` signature step is next and untested) before spending a rebuild on it.
+  user runs `sudo rm /mnt && sudo mkdir -m 0755 /mnt`.
+- **Validated by hand (2026-11-13):** with that command run first, the install in VMware
+  (UEFI, 64 GB disk, about 5.5 GB of memory) ended with "Successfully installed". So the
+  fix works, 5.5 GB of VM memory is enough, and the `bootc switch
+  --enforce-container-sigpolicy` step passed (it is `%post --erroronfail`, so a failure
+  would have aborted the install). Confirm the last point with `rpm-ostree status` on the
+  installed system. Anaconda's window still says "Bazzite installation" / "To begin using
+  Bazzite": it takes the name from the live environment, which is plain Bazzite.
+- Next: boot the installed system (TESTING.md I4 onwards), then rebuild the ISO once, with
+  the fix, after any first-boot findings. A rebuild is a new public artifact: ask first.
 - The text below is the earlier investigation, kept for the record.
 
 **First install attempt (2026-11-13) FAILED.** In VMware, Anaconda deployed the
@@ -241,11 +250,11 @@ image (15 GB on the virtual disk), then died with "The command `systemd-tmpfiles
 - Until this is solved the ISO does not install. The rebase route (README 3B) does not use
   this installer and is unaffected, but is itself untested.
 
-Not verified for the ISO (see `docs/TESTING.md`, Part I): that the installer completes;
-that the image's signature policy satisfies `--enforce-container-sigpolicy` at the end of
-the install; that an install with 5.5 GB of VM memory gets through; that the flash drive
-boots on the two machines; whether GitHub bills a public repo for artifact storage (its
-docs do not say).
+Not verified for the ISO (see `docs/TESTING.md`, Part I): that the installed system boots
+and reports `ghcr.io/thedarkteri/veil-os` as its update source; that updates and rollback
+work on it; that an ISO built WITH the `/mnt` fix installs without the manual command;
+that the flash drive boots on the two machines; whether GitHub bills a public repo for
+artifact storage (its docs do not say).
 
 ## Artwork notes
 
